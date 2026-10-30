@@ -1,5 +1,5 @@
 // Offline-first: de app werkt ook zonder verbinding. Verhoog VERSION na een wijziging.
-const VERSION = "v3";
+const VERSION = "v4";
 const FILES = ["./", "index.html", "style.css", "app.js", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {

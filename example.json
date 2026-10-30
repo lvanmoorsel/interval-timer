@@ -1,4 +1,4 @@
-{"title":"Balcony Upper Body","prepare":15,"work":20,"rest":10,"rounds":6,"betweenExercises":20,
+{"title":"Balcony Upper Body","prepare":15,"work":20,"rest":10,"rounds":6,"restBetweenRounds":20,
  "exercises":[
   {"name":"Push ups","detail":"Body weight · Chest & triceps"},
   {"name":"Bent over dumbbell row","detail":"2 × 10 kg · Back"},

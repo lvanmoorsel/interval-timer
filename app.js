@@ -22,7 +22,7 @@ document.querySelectorAll("[data-icon]").forEach(b => (b.innerHTML = icon(b.data
 
 // ---------- Workout-formaat ----------
 // JSON: {"title","prepare","work","rest","rounds","cycles","restBetweenCycles","cooldown",
-//        "betweenExercises","exercises":[{"name","detail","work?","rest?","rounds?"}]}
+//        "restBetweenRounds","exercises":[{"name","detail","work?","rest?"}]}
 // Compact (in een link): t= p= w= r= n= c= rc= cd= b= e=Naam~Detail|Naam~Detail   (JSON kan als j=)
 const num = v => (v === null || v === undefined || v === "" ? undefined : Number(v));
 
@@ -41,7 +41,7 @@ function normalize(w) {
     cycles: w.cycles ?? 1,
     restBetweenCycles: w.restBetweenCycles ?? 30,
     cooldown: w.cooldown ?? 0,
-    betweenExercises: w.betweenExercises ?? rest,
+    restBetweenRounds: w.restBetweenRounds ?? w.betweenExercises ?? rest,
     exercises: (w.exercises || []).map(e => (typeof e === "string" ? { name: e } : e)),
   };
   if (!out.exercises.length) throw new Error("The workout has no exercises");
@@ -60,7 +60,7 @@ function parseInput(raw) {
       title: q.get("t") || "Workout",
       prepare: num(q.get("p")), work: num(q.get("w")), rest: num(q.get("r")),
       rounds: num(q.get("n")), cycles: num(q.get("c")), restBetweenCycles: num(q.get("rc")),
-      cooldown: num(q.get("cd")), betweenExercises: num(q.get("b")),
+      cooldown: num(q.get("cd")), restBetweenRounds: num(q.get("b")),
       exercises: q.get("e").split("|").map(x => {
         const [name, detail] = x.split("~");
         return { name: name.trim(), detail: (detail || "").trim() };
@@ -71,27 +71,28 @@ function parseInput(raw) {
 }
 
 function buildPhases(w) {
-  const ph = [], exs = w.exercises;
+  const ph = [], exs = w.exercises, last = exs.length - 1;
   if (w.prepare > 0) ph.push({ type: "prepare", dur: w.prepare, ex: 0, round: 0, cycle: 1, next: exs[0].name });
+  const add = p => {
+    const prev = ph[ph.length - 1];
+    if (p.type === "work") p.announceName = !prev || prev.type === "cooldown" || (prev.type === "work");
+    ph.push(p);
+  };
+  // Een ronde = alle oefeningen één keer achter elkaar. Cyclus = alle rondes herhaald.
   for (let c = 1; c <= w.cycles; c++) {
-    exs.forEach((ex, i) => {
-      const work = ex.work ?? w.work, rest = ex.rest ?? w.rest, rounds = ex.rounds ?? w.rounds;
-      for (let r = 1; r <= rounds; r++) {
-        ph.push({ type: "work", dur: work, ex: i, round: r, rounds, cycle: c, name: ex.name, detail: ex.detail });
-        if (r < rounds) {
-          if (rest > 0) ph.push({ type: "rest", dur: rest, ex: i, round: r, rounds, cycle: c, name: ex.name, next: ex.name });
-          continue;
-        }
-        const lastEx = i === exs.length - 1;
-        if (!lastEx && w.betweenExercises > 0) {
-          ph.push({ type: "rest", dur: w.betweenExercises, ex: i, round: r, rounds, cycle: c, name: ex.name, next: exs[i + 1].name, announce: true });
-        } else if (lastEx && c < w.cycles && w.restBetweenCycles > 0) {
-          ph.push({ type: "rest", dur: w.restBetweenCycles, ex: i, round: r, rounds, cycle: c, name: ex.name, next: exs[0].name, announce: true });
-        }
-      }
-    });
+    for (let r = 1; r <= w.rounds; r++) {
+      exs.forEach((ex, i) => {
+        const base = { ex: i, round: r, rounds: w.rounds, cycle: c };
+        add({ ...base, type: "work", dur: ex.work ?? w.work, name: ex.name, detail: ex.detail });
+        let dur = 0, next = null;
+        if (i < last) { dur = ex.rest ?? w.rest; next = exs[i + 1].name; }
+        else if (r < w.rounds) { dur = w.restBetweenRounds; next = exs[0].name; }
+        else if (c < w.cycles) { dur = w.restBetweenCycles; next = exs[0].name; }
+        if (dur > 0) add({ ...base, type: "rest", dur, name: ex.name, next });
+      });
+    }
   }
-  if (w.cooldown > 0) ph.push({ type: "cooldown", dur: w.cooldown, ex: exs.length - 1, round: 0, cycle: w.cycles });
+  if (w.cooldown > 0) ph.push({ type: "cooldown", dur: w.cooldown, ex: last, round: 0, cycle: w.cycles });
   return ph;
 }
 const totalSeconds = w => buildPhases(w).reduce((a, p) => a + p.dur, 0);
@@ -206,11 +207,11 @@ let draft = null, draftIsNew = false, editing = null;
 const ROWS = [
   { k: "prepare", label: "Prepare", sub: "Countdown before you start", color: "var(--prepare)", unit: "s" },
   { k: "work", label: "Work", sub: "Work for this long", color: "var(--work)", unit: "s" },
-  { k: "rest", label: "Rest", sub: "Rest for this long", color: "var(--rest)", unit: "s" },
-  { k: "rounds", label: "Rounds", sub: "One round is work + rest, per exercise", color: "var(--cool)", unit: "n" },
-  { k: "cycles", label: "Cycles", sub: "How often all exercises are repeated", color: "var(--prepare)", unit: "n" },
+  { k: "rest", label: "Rest", sub: "Rest after each exercise", color: "var(--rest)", unit: "s" },
+  { k: "rounds", label: "Rounds", sub: "One round = every exercise once", color: "var(--cool)", unit: "n" },
+  { k: "cycles", label: "Cycles", sub: "How often all rounds are repeated", color: "var(--prepare)", unit: "n" },
   { k: "restBetweenCycles", label: "Rest between cycles", sub: "Recovery between cycles", color: "var(--prepare)", unit: "s" },
-  { k: "betweenExercises", label: "Rest between exercises", sub: "Pause between two exercises", color: "var(--rest)", unit: "s" },
+  { k: "restBetweenRounds", label: "Rest between rounds", sub: "Pause after the last exercise of a round", color: "var(--rest)", unit: "s" },
   { k: "cooldown", label: "Cooldown", sub: "Cooldown after the workout", color: "var(--cool)", unit: "s" },
 ];
 
@@ -345,8 +346,8 @@ function enterPhase(i, announce = true) {
   const p = phases[idx];
   remaining = p.dur * 1000; endAt = Date.now() + remaining; lastSec = null;
   if (announce) {
-    if (p.type === "work") { sound.work(); if (p.round === 1) speak(p.name); }
-    else if (p.type === "rest") { sound.rest(); if (p.announce) speak("Next: " + p.next); }
+    if (p.type === "work") { sound.work(); if (p.announceName) speak(p.name); }
+    else if (p.type === "rest") { sound.rest(); if (p.next) speak("Next: " + p.next); }
     else if (p.type === "cooldown") { sound.rest(); speak("Cooldown"); }
   }
   render();
@@ -426,7 +427,7 @@ function render() {
   else if (p.type === "cooldown") { $("exname").textContent = "Cool down"; $("exdetail").textContent = ""; $("next").textContent = ""; }
   else {
     $("exname").textContent = ex.name; $("exdetail").textContent = ex.detail || "";
-    $("next").textContent = p.type === "rest" ? "Next: " + p.next : "";
+    $("next").textContent = p.type === "rest" && p.next ? "Next: " + p.next : "";
   }
   const multiEx = workout.exercises.length > 1, rounds = p.rounds || 0;
   $("row-cycle").hidden = workout.cycles < 2;
