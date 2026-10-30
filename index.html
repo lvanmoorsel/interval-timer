@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="nl">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -19,34 +19,34 @@
 <main id="home">
   <header class="bar">
     <h1>Workouts</h1>
-    <button id="new" class="icon" aria-label="Nieuwe workout" data-icon="plus"></button>
+    <button id="new" class="icon" aria-label="New workout" data-icon="plus"></button>
   </header>
-  <div id="favs-wrap"><h2>Favorieten</h2><div id="favs" class="cards"></div></div>
-  <h2>Alle workouts</h2>
+  <div id="favs-wrap"><h2>Favourites</h2><div id="favs" class="cards"></div></div>
+  <h2>All workouts</h2>
   <div id="all" class="cards"></div>
-  <h2>Historie</h2>
+  <h2>History</h2>
   <ul id="history" class="history"></ul>
-  <h2>Plakken</h2>
-  <textarea id="paste" rows="4" placeholder="Plak JSON of een link uit ChatGPT"></textarea>
-  <button id="load" class="flat">Toevoegen</button>
+  <h2>Paste</h2>
+  <textarea id="paste" rows="4" placeholder="Paste JSON or a link from ChatGPT"></textarea>
+  <button id="load" class="flat">Add</button>
   <p id="err" class="err"></p>
 </main>
 
 <!-- Editor: zelfde opzet als de Tabata-instellingen -->
 <main id="edit" hidden>
   <header class="bar">
-    <button id="e-cancel" class="text">Annuleer</button>
+    <button id="e-cancel" class="text">Cancel</button>
     <div class="bar-title">Workout</div>
-    <button id="e-save" class="text save">Bewaar</button>
+    <button id="e-save" class="text save">Save</button>
   </header>
   <div class="scroll">
-    <input id="e-title" class="title-input" placeholder="Naam">
-    <h2>Intervallen</h2>
+    <input id="e-title" class="title-input" placeholder="Name">
+    <h2>Intervals</h2>
     <div id="e-rows" class="rows"></div>
-    <h2>Oefeningen</h2>
+    <h2>Exercises</h2>
     <div id="e-ex" class="ex-list"></div>
-    <button id="e-addex" class="flat">+ Oefening</button>
-    <button id="e-del" class="flat danger">Verwijder workout</button>
+    <button id="e-addex" class="flat">+ Exercise</button>
+    <button id="e-del" class="flat danger">Delete workout</button>
   </div>
 </main>
 
@@ -55,11 +55,11 @@
   <header class="bar">
     <button id="back" class="icon" aria-label="Stop" data-icon="close"></button>
     <div id="title" class="bar-title"></div>
-    <button id="mute" class="icon" aria-label="Geluid"></button>
+    <button id="mute" class="icon" aria-label="Sound"></button>
   </header>
 
   <section class="center">
-    <div id="phase">KLAAR</div>
+    <div id="phase">READY</div>
     <div class="clock">
       <svg viewBox="0 0 200 200" aria-hidden="true">
         <g id="ticks"></g>
@@ -74,16 +74,16 @@
   </section>
 
   <section class="dots">
-    <div id="row-cycle"><span>Cyclus</span><b id="cydots"></b></div>
-    <div id="row-ex"><span>Oefening</span><b id="exdots"></b></div>
-    <div><span>Ronde</span><b id="rdots"></b></div>
-    <div class="total"><span>Totaal nog</span><b id="total"></b></div>
+    <div id="row-cycle"><span>Cycle</span><b id="cydots"></b></div>
+    <div id="row-ex"><span>Exercise</span><b id="exdots"></b></div>
+    <div><span>Round</span><b id="rdots"></b></div>
+    <div class="total"><span>Total left</span><b id="total"></b></div>
   </section>
 
   <footer>
-    <button id="prev" class="icon" aria-label="Vorige" data-icon="prev"></button>
-    <button id="toggle" class="play" aria-label="Start/pauze"></button>
-    <button id="skip" class="icon" aria-label="Volgende" data-icon="next"></button>
+    <button id="prev" class="icon" aria-label="Previous" data-icon="prev"></button>
+    <button id="toggle" class="play" aria-label="Start/pause"></button>
+    <button id="skip" class="icon" aria-label="Next" data-icon="next"></button>
   </footer>
 </main>
 
@@ -93,7 +93,7 @@
     <div id="s-label"></div>
     <div id="s-value"></div>
     <div id="s-btns"></div>
-    <button id="s-done" class="flat">Klaar</button>
+    <button id="s-done" class="flat">Done</button>
   </div>
 </div>
 

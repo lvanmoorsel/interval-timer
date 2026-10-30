@@ -44,7 +44,7 @@ function normalize(w) {
     betweenExercises: w.betweenExercises ?? rest,
     exercises: (w.exercises || []).map(e => (typeof e === "string" ? { name: e } : e)),
   };
-  if (!out.exercises.length) throw new Error("De workout heeft geen oefeningen");
+  if (!out.exercises.length) throw new Error("The workout has no exercises");
   return out;
 }
 
@@ -67,7 +67,7 @@ function parseInput(raw) {
       }),
     });
   }
-  throw new Error("Geen workout gevonden in deze tekst");
+  throw new Error("No workout found in this text");
 }
 
 function buildPhases(w) {
@@ -129,13 +129,13 @@ const mmss = s => {
 };
 const mins = s => Math.max(1, Math.round(s / 60)) + " min";
 function dateLabel(ts) {
-  if (!ts) return "nog niet gedaan";
+  if (!ts) return "not done yet";
   const d = new Date(ts), now = new Date();
   const day = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diff = Math.round((day(now) - day(d)) / 864e5);
-  if (diff === 0) return "vandaag";
-  if (diff === 1) return "gisteren";
-  return d.toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short" });
+  if (diff === 0) return "today";
+  if (diff === 1) return "yesterday";
+  return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 }
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -143,21 +143,21 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "
 function cardHtml(w) {
   const names = w.exercises.length > 1 ? w.exercises.map(e => e.name).join(" · ") : "";
   const sub = [
-    w.exercises.length > 1 ? `${w.exercises.length} oefeningen` : null,
+    w.exercises.length > 1 ? `${w.exercises.length} exercises` : null,
     `${w.work}/${w.rest} sec`,
-    w.rounds > 1 ? `${w.rounds} rondes` : null,
-    w.cycles > 1 ? `${w.cycles} cycli` : null,
+    w.rounds > 1 ? `${w.rounds} rounds` : null,
+    w.cycles > 1 ? `${w.cycles} cycles` : null,
     mins(totalSeconds(w)),
   ].filter(Boolean).join(" · ");
   return `<div class="card" data-id="${w.id}">
     <div class="top">
-      <div class="name">${esc(w.title)}${w.fresh ? '<span class="badge">Nieuw</span>' : ""}</div>
-      <button class="mini fav ${w.favorite ? "on" : ""}" data-act="fav" aria-label="Favoriet">${icon("star")}</button>
-      <button class="mini" data-act="edit" aria-label="Aanpassen">${icon("edit")}</button>
+      <div class="name">${esc(w.title)}${w.fresh ? '<span class="badge">New</span>' : ""}</div>
+      <button class="mini fav ${w.favorite ? "on" : ""}" data-act="fav" aria-label="Favourite">${icon("star")}</button>
+      <button class="mini" data-act="edit" aria-label="Edit">${icon("edit")}</button>
     </div>
     <div class="meta">${esc(sub)}</div>
     ${names ? `<div class="exs">${esc(names)}</div>` : ""}
-    <div class="foot"><span>Laatst: ${dateLabel(w.lastDone)}</span><button class="start" data-act="start">Start</button></div>
+    <div class="foot"><span>Last: ${dateLabel(w.lastDone)}</span><button class="start" data-act="start">Start</button></div>
   </div>`;
 }
 
@@ -167,10 +167,10 @@ function renderHome() {
   const rest = library.filter(w => !w.favorite).sort((a, b) => (b.fresh ? 1 : 0) - (a.fresh ? 1 : 0) || by(a, b));
   $("favs-wrap").hidden = !favs.length;
   $("favs").innerHTML = favs.map(cardHtml).join("");
-  $("all").innerHTML = rest.map(cardHtml).join("") || '<div class="empty">Alles staat bij je favorieten.</div>';
+  $("all").innerHTML = rest.map(cardHtml).join("") || '<div class="empty">Everything is in your favourites.</div>';
   $("history").innerHTML = log.length
     ? log.slice(0, 12).map(h => `<li><span>${esc(h.title)}</span><small>${dateLabel(h.date)} · ${mins(h.seconds)}</small></li>`).join("")
-    : '<li class="empty">Nog geen workouts afgerond.</li>';
+    : '<li class="empty">No workouts completed yet.</li>';
 }
 
 function showView(v) {
@@ -204,20 +204,20 @@ const history_replace = () => window.history.replaceState(null, "", location.pat
 // ---------- Editor ----------
 let draft = null, draftIsNew = false, editing = null;
 const ROWS = [
-  { k: "prepare", label: "Prepare", sub: "Aftellen voor je begint", color: "var(--prepare)", unit: "s" },
-  { k: "work", label: "Work", sub: "Zo lang oefenen", color: "var(--work)", unit: "s" },
-  { k: "rest", label: "Rest", sub: "Zo lang rusten", color: "var(--rest)", unit: "s" },
-  { k: "rounds", label: "Rounds", sub: "Een ronde is work + rest, per oefening", color: "var(--cool)", unit: "n" },
-  { k: "cycles", label: "Cycles", sub: "Hoe vaak alle oefeningen herhaald worden", color: "var(--prepare)", unit: "n" },
-  { k: "restBetweenCycles", label: "Rest between cycles", sub: "Herstel tussen cycli", color: "var(--prepare)", unit: "s" },
-  { k: "betweenExercises", label: "Rest between exercises", sub: "Pauze tussen twee oefeningen", color: "var(--rest)", unit: "s" },
-  { k: "cooldown", label: "Cooldown", sub: "Uitlopen na de workout", color: "var(--cool)", unit: "s" },
+  { k: "prepare", label: "Prepare", sub: "Countdown before you start", color: "var(--prepare)", unit: "s" },
+  { k: "work", label: "Work", sub: "Work for this long", color: "var(--work)", unit: "s" },
+  { k: "rest", label: "Rest", sub: "Rest for this long", color: "var(--rest)", unit: "s" },
+  { k: "rounds", label: "Rounds", sub: "One round is work + rest, per exercise", color: "var(--cool)", unit: "n" },
+  { k: "cycles", label: "Cycles", sub: "How often all exercises are repeated", color: "var(--prepare)", unit: "n" },
+  { k: "restBetweenCycles", label: "Rest between cycles", sub: "Recovery between cycles", color: "var(--prepare)", unit: "s" },
+  { k: "betweenExercises", label: "Rest between exercises", sub: "Pause between two exercises", color: "var(--rest)", unit: "s" },
+  { k: "cooldown", label: "Cooldown", sub: "Cooldown after the workout", color: "var(--cool)", unit: "s" },
 ];
 
 function openEditor(w) {
   draftIsNew = !w;
   editing = w || null;
-  draft = JSON.parse(JSON.stringify(w || normalize({ title: "Nieuwe workout", prepare: 10, work: 40, rest: 20, rounds: 1, exercises: [{ name: "Oefening 1" }] })));
+  draft = JSON.parse(JSON.stringify(w || normalize({ title: "New workout", prepare: 10, work: 40, rest: 20, rounds: 1, exercises: [{ name: "Exercise 1" }] })));
   $("e-title").value = draft.title;
   $("e-del").hidden = draftIsNew;
   paintEditor();
@@ -231,9 +231,9 @@ function paintEditor() {
       <div class="val">${r.unit === "s" ? ":" + String(draft[r.k]).padStart(2, "0") : draft[r.k]}</div>
       <span class="chev">›</span></div>`).join("");
   $("e-ex").innerHTML = draft.exercises.map((x, i) => `<div class="ex" data-i="${i}">
-      <input class="n" value="${esc(x.name)}" placeholder="Naam oefening">
-      <input class="d" value="${esc(x.detail || "")}" placeholder="Detail (gewicht, spiergroep)">
-      <button data-del="${i}" aria-label="Verwijder">${icon("trash")}</button></div>`).join("");
+      <input class="n" value="${esc(x.name)}" placeholder="Exercise name">
+      <input class="d" value="${esc(x.detail || "")}" placeholder="Detail (weight, muscle group)">
+      <button data-del="${i}" aria-label="Remove">${icon("trash")}</button></div>`).join("");
 }
 $("e-rows").addEventListener("click", e => {
   const row = e.target.closest(".row"); if (!row) return;
@@ -249,7 +249,7 @@ $("e-ex").addEventListener("click", e => {
   const b = e.target.closest("[data-del]"); if (!b || draft.exercises.length < 2) return;
   draft.exercises.splice(+b.dataset.del, 1); paintEditor();
 });
-$("e-addex").onclick = () => { draft.exercises.push({ name: "Oefening " + (draft.exercises.length + 1) }); paintEditor(); };
+$("e-addex").onclick = () => { draft.exercises.push({ name: "Exercise " + (draft.exercises.length + 1) }); paintEditor(); };
 $("e-cancel").onclick = () => { showView("home"); renderHome(); };
 $("e-save").onclick = () => {
   draft.title = $("e-title").value.trim() || "Workout";
@@ -260,7 +260,7 @@ $("e-save").onclick = () => {
   saveLib(); showView("home"); renderHome();
 };
 $("e-del").onclick = () => {
-  if (!confirm(`"${editing.title}" verwijderen?`)) return;
+  if (!confirm(`Delete "${editing.title}"?`)) return;
   library = library.filter(x => x.id !== editing.id); saveLib(); showView("home"); renderHome();
 };
 $("new").onclick = () => openEditor(null);
@@ -301,7 +301,7 @@ function beep(freq, dur, delay = 0, vol = 0.5) {
 function speak(text) {
   if (muted || !("speechSynthesis" in window)) return;
   speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text); u.lang = "nl-NL"; u.rate = 1.05;
+  const u = new SpeechSynthesisUtterance(text); u.lang = "en-GB"; u.rate = 1.05;
   speechSynthesis.speak(u);
 }
 const sound = {
@@ -346,7 +346,7 @@ function enterPhase(i, announce = true) {
   remaining = p.dur * 1000; endAt = Date.now() + remaining; lastSec = null;
   if (announce) {
     if (p.type === "work") { sound.work(); if (p.round === 1) speak(p.name); }
-    else if (p.type === "rest") { sound.rest(); if (p.announce) speak("Straks: " + p.next); }
+    else if (p.type === "rest") { sound.rest(); if (p.announce) speak("Next: " + p.next); }
     else if (p.type === "cooldown") { sound.rest(); speak("Cooldown"); }
   }
   render();
@@ -356,12 +356,12 @@ function finish() {
   running = false; clearInterval(timerId); timerId = null; wake?.release?.();
   idx = phases.length;
   document.body.className = "done";
-  $("phase").textContent = "KLAAR"; $("time").textContent = "00:00";
+  $("phase").textContent = "DONE"; $("time").textContent = "00:00";
   $("ring").style.strokeDashoffset = CIRC;
-  $("exname").textContent = "Goed gedaan"; $("exdetail").textContent = ""; $("next").textContent = "";
+  $("exname").textContent = "Well done"; $("exdetail").textContent = ""; $("next").textContent = "";
   $("total").textContent = "00:00";
   $("toggle").innerHTML = icon("replay");
-  sound.done(); speak("Klaar");
+  sound.done(); speak("Done");
   const secs = totalSeconds(workout), now = Date.now();
   workout.lastDone = now; saveLib();
   log.unshift({ title: workout.title, date: now, seconds: secs });
@@ -395,7 +395,7 @@ function toggle() {
     endAt = Date.now() + remaining;
     keepAwake();
     if (!timerId) timerId = setInterval(tick, 100);
-    if (idx === 0 && phases[0].type === "prepare" && remaining === phases[0].dur * 1000) speak("Straks: " + phases[0].next);
+    if (idx === 0 && phases[0].type === "prepare" && remaining === phases[0].dur * 1000) speak("Next: " + phases[0].next);
   } else wake?.release?.();
   $("toggle").innerHTML = icon(running ? "pause" : "play");
 }
@@ -407,7 +407,7 @@ function prev() {
 }
 
 // ---------- Timer-weergave ----------
-const LABEL = { prepare: "VOORBEREIDEN", work: "WERK", rest: "RUST", cooldown: "COOLDOWN" };
+const LABEL = { prepare: "GET READY", work: "WORK", rest: "REST", cooldown: "COOLDOWN" };
 const dots = (n, at) => Array.from({ length: n }, (_, i) => (i < at ? "●" : "○")).join("");
 function paintTime() {
   $("time").textContent = mmss(remaining / 1000);
@@ -422,11 +422,11 @@ function render() {
   document.body.className = p.type;
   $("phase").textContent = LABEL[p.type];
   const ex = workout.exercises[p.ex];
-  if (p.type === "prepare") { $("exname").textContent = ""; $("exdetail").textContent = ""; $("next").textContent = "Straks: " + p.next; }
-  else if (p.type === "cooldown") { $("exname").textContent = "Uitlopen"; $("exdetail").textContent = ""; $("next").textContent = ""; }
+  if (p.type === "prepare") { $("exname").textContent = ""; $("exdetail").textContent = ""; $("next").textContent = "Next: " + p.next; }
+  else if (p.type === "cooldown") { $("exname").textContent = "Cool down"; $("exdetail").textContent = ""; $("next").textContent = ""; }
   else {
     $("exname").textContent = ex.name; $("exdetail").textContent = ex.detail || "";
-    $("next").textContent = p.type === "rest" ? "Straks: " + p.next : "";
+    $("next").textContent = p.type === "rest" ? "Next: " + p.next : "";
   }
   const multiEx = workout.exercises.length > 1, rounds = p.rounds || 0;
   $("row-cycle").hidden = workout.cycles < 2;
