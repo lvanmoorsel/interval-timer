@@ -1,7 +1,7 @@
 # ChatGPT instructions (Project or Custom GPT)
 
 Put this in the instructions of a ChatGPT project or Custom GPT. Replace `BASELINK` with the address of your timer
-(for example `https://yourname.github.io/interval-timer/`).
+(for example `https://lvanmoorsel.github.io/interval-timer/`).
 
 ---
 
