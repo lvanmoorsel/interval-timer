@@ -15,46 +15,87 @@
 </head>
 <body class="home">
 
+<!-- Home: bibliotheek, favorieten, historie -->
 <main id="home">
-  <h1>Interval Timer</h1>
-  <button id="quick" class="big">Snelle tabata (20/10 × 8)</button>
-
-  <h2>Laatste workout</h2>
-  <ul id="recent"></ul>
-
-  <h2>Workout plakken</h2>
-  <textarea id="paste" rows="5" placeholder="Plak JSON uit ChatGPT, of een volledige link"></textarea>
-  <button id="load">Laden</button>
+  <header class="bar">
+    <h1>Workouts</h1>
+    <button id="new" class="icon" aria-label="Nieuwe workout" data-icon="plus"></button>
+  </header>
+  <div id="favs-wrap"><h2>Favorieten</h2><div id="favs" class="cards"></div></div>
+  <h2>Alle workouts</h2>
+  <div id="all" class="cards"></div>
+  <h2>Historie</h2>
+  <ul id="history" class="history"></ul>
+  <h2>Plakken</h2>
+  <textarea id="paste" rows="4" placeholder="Plak JSON of een link uit ChatGPT"></textarea>
+  <button id="load" class="flat">Toevoegen</button>
   <p id="err" class="err"></p>
 </main>
 
+<!-- Editor: zelfde opzet als de Tabata-instellingen -->
+<main id="edit" hidden>
+  <header class="bar">
+    <button id="e-cancel" class="text">Annuleer</button>
+    <div class="bar-title">Workout</div>
+    <button id="e-save" class="text save">Bewaar</button>
+  </header>
+  <div class="scroll">
+    <input id="e-title" class="title-input" placeholder="Naam">
+    <h2>Intervallen</h2>
+    <div id="e-rows" class="rows"></div>
+    <h2>Oefeningen</h2>
+    <div id="e-ex" class="ex-list"></div>
+    <button id="e-addex" class="flat">+ Oefening</button>
+    <button id="e-del" class="flat danger">Verwijder workout</button>
+  </div>
+</main>
+
+<!-- Timer -->
 <main id="run" hidden>
-  <header>
-    <button id="back" class="icon" aria-label="Stop">✕</button>
-    <div id="title"></div>
-    <button id="mute" class="icon" aria-label="Geluid">🔊</button>
+  <header class="bar">
+    <button id="back" class="icon" aria-label="Stop" data-icon="close"></button>
+    <div id="title" class="bar-title"></div>
+    <button id="mute" class="icon" aria-label="Geluid"></button>
   </header>
 
   <section class="center">
     <div id="phase">KLAAR</div>
-    <div id="time">00:00</div>
+    <div class="clock">
+      <svg viewBox="0 0 200 200" aria-hidden="true">
+        <g id="ticks"></g>
+        <circle class="track" cx="100" cy="100" r="86"/>
+        <circle id="ring" cx="100" cy="100" r="86" transform="rotate(-90 100 100)"/>
+      </svg>
+      <div id="time">00:00</div>
+    </div>
     <div id="exname"></div>
     <div id="exdetail"></div>
     <div id="next"></div>
   </section>
 
   <section class="dots">
-    <div><span>Oefening</span><b id="exdots"></b></div>
+    <div id="row-cycle"><span>Cyclus</span><b id="cydots"></b></div>
+    <div id="row-ex"><span>Oefening</span><b id="exdots"></b></div>
     <div><span>Ronde</span><b id="rdots"></b></div>
     <div class="total"><span>Totaal nog</span><b id="total"></b></div>
   </section>
 
   <footer>
-    <button id="prev" class="icon" aria-label="Vorige">⏮</button>
-    <button id="toggle" class="play" aria-label="Start/pauze">▶</button>
-    <button id="skip" class="icon" aria-label="Volgende">⏭</button>
+    <button id="prev" class="icon" aria-label="Vorige" data-icon="prev"></button>
+    <button id="toggle" class="play" aria-label="Start/pauze"></button>
+    <button id="skip" class="icon" aria-label="Volgende" data-icon="next"></button>
   </footer>
 </main>
+
+<!-- Waarde-kiezer -->
+<div id="sheet" hidden>
+  <div class="sheet-card">
+    <div id="s-label"></div>
+    <div id="s-value"></div>
+    <div id="s-btns"></div>
+    <button id="s-done" class="flat">Klaar</button>
+  </div>
+</div>
 
 <script src="app.js"></script>
 </body>
