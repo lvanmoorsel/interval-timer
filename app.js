@@ -177,6 +177,7 @@ function renderHome() {
 
 function showView(v) {
   if (v !== "run") setDimmed(false);
+  if (v === "home") setTimeout(applyPendingUpdate, 0);
   ["home", "edit", "run"].forEach(id => ($(id).hidden = id !== v));
   document.body.className = v === "run" ? document.body.className : "home";
   if (v !== "run") document.body.className = "home";
@@ -515,4 +516,40 @@ paintMute();
 renderHome();
 if (location.hash.length > 1) tryLoad(location.hash);
 window.addEventListener("hashchange", () => { if (location.hash.length > 1) tryLoad(location.hash); });
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+// A new worker gets fresh assets, then reload only when no workout/editor is open.
+let pendingUpdate = false, reloadingForUpdate = false, updateRegistration = null;
+function applyPendingUpdate() {
+  if (!pendingUpdate || reloadingForUpdate || $("home").hidden) return;
+  reloadingForUpdate = true;
+  location.reload();
+}
+async function checkForUpdates(manual = false) {
+  if (!updateRegistration) return;
+  if (manual) $("update-status").textContent = "Checking for updates…";
+  try {
+    await updateRegistration.update();
+    if (manual) $("update-status").textContent = updateRegistration.installing || pendingUpdate
+      ? "Downloading update…" : "Version 13 · Update check complete";
+    applyPendingUpdate();
+  } catch {
+    if (manual) $("update-status").textContent = "Offline · Try again when connected";
+  }
+}
+$("check-update").onclick = () => checkForUpdates(true);
+if ("serviceWorker" in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController) return;
+    pendingUpdate = true;
+    $("update-status").textContent = "Update ready · Applies on the Workouts screen";
+    applyPendingUpdate();
+  });
+  navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(reg => {
+    updateRegistration = reg;
+    checkForUpdates();
+  }).catch(() => { $("update-status").textContent = "Version 13 · Offline mode unavailable"; });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") checkForUpdates();
+  });
+  window.addEventListener("online", () => checkForUpdates());
+}
