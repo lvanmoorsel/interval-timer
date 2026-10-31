@@ -285,9 +285,22 @@ function openSheet(row, value, onDone) {
 
 // ---------- Geluid ----------
 let ctx = null, muted = false;
+let countdownNodes = [];
+function cancelCountdown() {
+  countdownNodes.forEach(o => { try { o.stop(); } catch {} });
+  countdownNodes = [];
+}
+function scheduleCountdown() {
+  cancelCountdown();
+  if (!running || muted || !ctx) return;
+  for (const sec of [3, 2, 1]) {
+    const delay = remaining / 1000 - sec;
+    if (delay >= 0) countdownNodes.push(beep(880, 0.2, delay, 0.7));
+  }
+}
 function unlockAudio() {
   if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
-  if (ctx.state === "suspended") ctx.resume();
+  if (ctx.state !== "running") ctx.resume().catch(() => {});
 }
 function beep(freq, dur, delay = 0, vol = 0.5) {
   if (muted || !ctx) return;
@@ -298,6 +311,7 @@ function beep(freq, dur, delay = 0, vol = 0.5) {
   g.gain.setValueAtTime(vol, t + dur - 0.03);
   g.gain.linearRampToValueAtTime(0, t + dur);
   o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + dur);
+  return o;
 }
 function speak(text) {
   if (muted || !("speechSynthesis" in window)) return;
@@ -315,7 +329,11 @@ const sound = {
 // ---------- Wake lock ----------
 let wake = null;
 async function keepAwake() { try { wake = await navigator.wakeLock?.request("screen"); } catch { /* ok */ } }
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && running) keepAwake(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && running) {
+    unlockAudio(); tick(); keepAwake(); scheduleCountdown();
+  }
+});
 
 // ---------- Timer ----------
 let workout = null, phases = [], idx = 0, endAt = 0, remaining = 0, running = false, lastSec = null, timerId = null;
@@ -332,6 +350,7 @@ const CIRC = 2 * Math.PI * 86;
 })();
 
 function startWorkout(w) {
+  cancelCountdown();
   workout = w; phases = buildPhases(w); idx = 0;
   remaining = phases[0].dur * 1000; running = false; lastSec = null;
   delete w.fresh;
@@ -350,10 +369,12 @@ function enterPhase(i, announce = true) {
     else if (p.type === "rest") { sound.rest(); if (p.next) speak("Next: " + p.next); }
     else if (p.type === "cooldown") { sound.rest(); speak("Cooldown"); }
   }
+  scheduleCountdown();
   render();
 }
 
 function finish() {
+  cancelCountdown();
   running = false; clearInterval(timerId); timerId = null; wake?.release?.();
   idx = phases.length;
   document.body.className = "done";
@@ -373,16 +394,21 @@ function tick() {
   if (!running) return;
   let rem = endAt - Date.now();
   if (rem <= 0) {
-    if (!phases[idx + 1]) return finish();
-    const over = -rem;
-    enterPhase(idx + 1);
-    if (over < 1000) endAt -= over;
+    // Advance against the original deadline, including every phase missed while suspended.
+    let deadline = endAt, next = idx;
+    while (deadline <= Date.now()) {
+      next++;
+      if (next >= phases.length) return finish();
+      deadline += phases[next].dur * 1000;
+    }
+    enterPhase(next, false);
+    endAt = deadline;
     rem = endAt - Date.now();
-  }
-  const sec = Math.ceil(rem / 1000);
-  if (sec !== lastSec) {
-    lastSec = sec;
-    if (sec >= 1 && sec <= 3 && phases[idx].dur > 3) sound.tick();
+    remaining = rem;
+    scheduleCountdown();
+    const p = phases[idx];
+    if (p.type === "work") { sound.work(); if (p.announceName) speak(p.name); }
+    else if (p.type === "rest") { sound.rest(); if (p.next) speak("Next: " + p.next); }
   }
   remaining = rem;
   paintTime();
@@ -395,9 +421,13 @@ function toggle() {
   if (running) {
     endAt = Date.now() + remaining;
     keepAwake();
+    scheduleCountdown();
     if (!timerId) timerId = setInterval(tick, 100);
     if (idx === 0 && phases[0].type === "prepare" && remaining === phases[0].dur * 1000) speak("Next: " + phases[0].next);
-  } else wake?.release?.();
+  } else {
+    remaining = Math.max(0, endAt - Date.now());
+    cancelCountdown(); wake?.release?.();
+  }
   $("toggle").innerHTML = icon(running ? "pause" : "play");
 }
 function skip() { unlockAudio(); if (idx < phases.length) { enterPhase(idx + 1); if (running) endAt = Date.now() + remaining; } }
@@ -443,8 +473,9 @@ $("toggle").onclick = toggle;
 $("skip").onclick = skip;
 $("prev").onclick = prev;
 const paintMute = () => { $("mute").innerHTML = icon(muted ? "mute" : "speaker"); };
-$("mute").onclick = () => { muted = !muted; paintMute(); if (muted) speechSynthesis?.cancel(); };
+$("mute").onclick = () => { muted = !muted; paintMute(); scheduleCountdown(); if (muted) speechSynthesis?.cancel(); };
 $("back").onclick = () => {
+  cancelCountdown();
   running = false; clearInterval(timerId); timerId = null; wake?.release?.(); speechSynthesis?.cancel();
   showView("home"); renderHome();
 };
