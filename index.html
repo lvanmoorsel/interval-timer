@@ -55,6 +55,7 @@
   <header class="bar">
     <button id="back" class="icon" aria-label="Stop" data-icon="close"></button>
     <div id="title" class="bar-title"></div>
+    <button id="dim" class="icon" aria-label="Dim screen" data-icon="moon"></button>
     <button id="mute" class="icon" aria-label="Sound"></button>
   </header>
 
@@ -86,6 +87,16 @@
     <button id="skip" class="icon" aria-label="Next" data-icon="next"></button>
   </footer>
 </main>
+
+<!-- Black screen keeps the app in the foreground. -->
+<section id="dim-screen" aria-label="Dimmed timer" hidden>
+  <div class="dim-readout">
+    <div id="dim-phase">READY</div>
+    <div id="dim-time">00:00</div>
+    <div id="dim-status"></div>
+  </div>
+  <button id="undim" aria-label="Restore screen">Restore screen</button>
+</section>
 
 <!-- Waarde-kiezer -->
 <div id="sheet" hidden>

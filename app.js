@@ -4,6 +4,7 @@ const $ = id => document.getElementById(id);
 
 // ---------- Iconen (dunne lijn) ----------
 const ICONS = {
+  moon: '<path d="M20 14a8 8 0 0 1-10-10 8.5 8.5 0 1 0 10 10z"/>',
   speaker: '<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a7.6 7.6 0 0 1 0 11"/>',
   mute:    '<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>',
   play:    '<path d="M8 5.5v13l11-6.5z"/>',
@@ -175,6 +176,7 @@ function renderHome() {
 }
 
 function showView(v) {
+  if (v !== "run") setDimmed(false);
   ["home", "edit", "run"].forEach(id => ($(id).hidden = id !== v));
   document.body.className = v === "run" ? document.body.className : "home";
   if (v !== "run") document.body.className = "home";
@@ -350,6 +352,7 @@ const CIRC = 2 * Math.PI * 86;
 })();
 
 function startWorkout(w) {
+  setDimmed(false);
   cancelCountdown();
   workout = w; phases = buildPhases(w); idx = 0;
   remaining = phases[0].dur * 1000; running = false; lastSec = null;
@@ -378,6 +381,7 @@ function finish() {
   running = false; clearInterval(timerId); timerId = null; wake?.release?.();
   idx = phases.length;
   document.body.className = "done";
+  setDimmed(false);
   $("phase").textContent = "DONE"; $("time").textContent = "00:00";
   $("ring").style.strokeDashoffset = CIRC;
   $("exname").textContent = "Well done"; $("exdetail").textContent = ""; $("next").textContent = "";
@@ -429,6 +433,7 @@ function toggle() {
     cancelCountdown(); wake?.release?.();
   }
   $("toggle").innerHTML = icon(running ? "pause" : "play");
+  paintDimmed();
 }
 function skip() { unlockAudio(); if (idx < phases.length) { enterPhase(idx + 1); if (running) endAt = Date.now() + remaining; } }
 function prev() {
@@ -442,6 +447,7 @@ const LABEL = { prepare: "GET READY", work: "WORK", rest: "REST", cooldown: "COO
 const dots = (n, at) => Array.from({ length: n }, (_, i) => (i < at ? "●" : "○")).join("");
 function paintTime() {
   $("time").textContent = mmss(remaining / 1000);
+  paintDimmed();
   const dur = phases[Math.min(idx, phases.length - 1)].dur * 1000;
   $("ring").style.strokeDashoffset = CIRC * (1 - Math.max(0, Math.min(1, remaining / dur)));
   let tot = remaining;
@@ -451,6 +457,7 @@ function paintTime() {
 function render() {
   const p = phases[idx];
   document.body.className = p.type;
+  document.body.classList.toggle("dimmed", !$("dim-screen").hidden);
   $("phase").textContent = LABEL[p.type];
   const ex = workout.exercises[p.ex];
   if (p.type === "prepare") { $("exname").textContent = ""; $("exdetail").textContent = ""; $("next").textContent = "Next: " + p.next; }
@@ -468,6 +475,28 @@ function render() {
   $("toggle").innerHTML = icon(running ? "pause" : "play");
   paintTime();
 }
+
+function paintDimmed() {
+  if ($("dim-screen").hidden) return;
+  $("dim-time").textContent = mmss(remaining / 1000);
+  $("dim-phase").textContent = LABEL[phases[idx]?.type] || "DONE";
+  $("dim-status").textContent = running ? "" : "Paused";
+}
+function setDimmed(dimmed) {
+  $("dim-screen").hidden = !dimmed;
+  $("run").inert = dimmed;
+  document.body.classList.toggle("dimmed", dimmed);
+  if (dimmed) {
+    paintDimmed();
+    if (running) keepAwake();
+    $("undim").focus();
+  } else if (!$("run").hidden) $("dim").focus();
+}
+$("dim").onclick = () => setDimmed(true);
+$("undim").onclick = () => setDimmed(false);
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && !$("dim-screen").hidden) setDimmed(false);
+});
 
 $("toggle").onclick = toggle;
 $("skip").onclick = skip;
