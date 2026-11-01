@@ -30,6 +30,9 @@ const num = v => (v === null || v === undefined || v === "" ? undefined : Number
 function normalize(w) {
   const rest = w.rest ?? 10;
   const out = {
+    type: w.type === "gym" ? "gym" : "interval",
+    sets: w.sets ?? 3,
+    finisher: w.finisher || null,
     id: w.id || null,
     title: w.title || "Workout",
     favorite: !!w.favorite,
@@ -46,7 +49,48 @@ function normalize(w) {
     exercises: (w.exercises || []).map(e => (typeof e === "string" ? { name: e } : e)),
   };
   if (!out.exercises.length) throw new Error("The workout has no exercises");
+  if (out.type === "gym") {
+    out.exercises = out.exercises.map(e => ({ ...e, sets: Math.max(1, Math.floor(e.sets ?? out.sets)) }));
+  }
+  const countKeys = ["sets", "rounds", "cycles"];
+  const validate = (value, count = false) => {
+    if (!Number.isFinite(value) || value < (count ? 1 : 0) || value > (count ? 100 : 86400) || (count && !Number.isInteger(value))) throw new Error("Use valid durations and whole-number counts (1–100)");
+  };
+  for (const key of ["prepare", "work", "rest", "cooldown", "restBetweenCycles", "restBetweenRounds", ...countKeys]) validate(out[key], countKeys.includes(key));
+  const checkExercise = e => {
+    if (typeof e.name !== "string" || !e.name.trim()) throw new Error("Each exercise needs a name");
+    if (e.sets !== undefined) validate(e.sets, true);
+    for (const key of ["work", "rest"]) if (e[key] !== undefined) validate(e[key]);
+  };
+  out.exercises.forEach(checkExercise);
+  if (out.finisher) {
+    if (!Array.isArray(out.finisher.exercises)) throw new Error("Finisher needs an exercises list");
+    if (out.finisher.rounds !== undefined) validate(out.finisher.rounds, true);
+    for (const key of ["work", "rest"]) if (out.finisher[key] !== undefined) validate(out.finisher[key]);
+    out.finisher.exercises.forEach(checkExercise);
+  }
   return out;
+}
+
+// Convert old links with explicit "set 1 / set 2 / set 3" into real gym sets.
+function convertLegacyGym(w) {
+  if (!w.exercises.some(e => / set 1$/i.test(e.name))) return w;
+  const strength = [], tail = [];
+  for (const e of w.exercises) {
+    const m = e.name.match(/^(.*?) set (\d+)$/i);
+    if (!m) { tail.push(e); continue; }
+    const previous = strength[strength.length - 1];
+    if (previous && previous.name === m[1] && previous.detail === e.detail) previous.sets++;
+    else strength.push({ ...e, name: m[1], sets: 1 });
+  }
+  const cleaned = tail.map(e => ({ ...e, name: e.name.replace(/ \d+$/, "") }));
+  for (let size = 1; size <= cleaned.length / 2; size++) {
+    if (cleaned.length % size === 0 && cleaned.every((e, i) => e.name === cleaned[i % size].name && e.detail === cleaned[i % size].detail)) {
+      return normalize({ ...w, type: "gym", exercises: strength,
+        finisher: { rounds: cleaned.length / size, work: w.work, rest: w.rest, exercises: cleaned.slice(0, size) } });
+    }
+  }
+  return normalize({ ...w, type: "gym", exercises: strength.concat(tail.map(e => ({ ...e, mode: "timed", sets: 1 }))) });
 }
 
 function parseInput(raw) {
@@ -57,7 +101,8 @@ function parseInput(raw) {
   const q = new URLSearchParams(s);
   if (q.has("j")) return normalize(JSON.parse(q.get("j")));
   if (q.has("e")) {
-    return normalize({
+    const parsed = normalize({
+      type: q.get("type"),
       title: q.get("t") || "Workout",
       prepare: num(q.get("p")), work: num(q.get("w")), rest: num(q.get("r")),
       rounds: num(q.get("n")), cycles: num(q.get("c")), restBetweenCycles: num(q.get("rc")),
@@ -67,11 +112,43 @@ function parseInput(raw) {
         return { name: name.trim(), detail: (detail || "").trim() };
       }),
     });
+    return convertLegacyGym(parsed);
   }
   throw new Error("No workout found in this text");
 }
 
+function allExercises(w) { return [...w.exercises, ...(w.type === "gym" ? w.finisher?.exercises || [] : [])]; }
+function buildGymPhases(w) {
+  const ph = [], all = allExercises(w);
+  const addWork = (e, ex, set, sets, timed, round = set) => ph.push({
+    type: "work", dur: timed ? (e.work ?? w.work) : 0, manual: !timed,
+    ex, set, sets, round, rounds: sets, cycle: 1, name: e.name,
+    detail: [e.detail, e.reps ? `${e.reps} reps` : ""].filter(Boolean).join(" · "), announceName: true,
+  });
+  if (w.prepare > 0) ph.push({ type: "prepare", dur: w.prepare, ex: 0, next: all[0].name });
+  w.exercises.forEach((e, i) => {
+    const sets = e.sets ?? w.sets;
+    for (let set = 1; set <= sets; set++) {
+      addWork(e, i, set, sets, e.mode === "timed");
+      const next = set < sets ? e : all[i + 1];
+      if (next && (e.rest ?? w.rest) > 0) ph.push({ type: "rest", dur: e.rest ?? w.rest, ex: i, set, sets, name: e.name, next: next.name });
+    }
+  });
+  const f = w.finisher;
+  if (f?.exercises?.length) {
+    for (let round = 1; round <= (f.rounds ?? 3); round++) {
+      f.exercises.forEach((e, i) => {
+        addWork({ ...e, work: e.work ?? f.work ?? w.work }, w.exercises.length + i, round, f.rounds ?? 3, true);
+        const next = f.exercises[i + 1] || (round < (f.rounds ?? 3) ? f.exercises[0] : null);
+        if (next && (e.rest ?? f.rest ?? w.rest) > 0) ph.push({ type: "rest", dur: e.rest ?? f.rest ?? w.rest, ex: w.exercises.length + i, set: round, sets: f.rounds ?? 3, name: e.name, next: next.name });
+      });
+    }
+  }
+  if (w.cooldown > 0) ph.push({ type: "cooldown", dur: w.cooldown, ex: all.length - 1 });
+  return ph;
+}
 function buildPhases(w) {
+  if (w.type === "gym") return buildGymPhases(w);
   const ph = [], exs = w.exercises, last = exs.length - 1;
   if (w.prepare > 0) ph.push({ type: "prepare", dur: w.prepare, ex: 0, round: 0, cycle: 1, next: exs[0].name });
   const add = p => {
@@ -103,7 +180,8 @@ const store = {
   get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* privé-modus */ } },
 };
-let library = store.get("library", []).map(normalize);
+let library = store.get("library", []).map(normalize).map(convertLegacyGym);
+let libraryType = "interval";
 let log = store.get("history", []);
 const saveLib = () => store.set("library", library);
 const newId = () => "w" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
@@ -143,8 +221,8 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "
 
 // ---------- Home ----------
 function cardHtml(w) {
-  const names = w.exercises.length > 1 ? w.exercises.map(e => e.name).join(" · ") : "";
-  const sub = [
+  const names = allExercises(w).map(e => e.name + (w.type === "gym" && e.mode !== "timed" ? ` (${e.sets ?? w.sets} sets)` : "")).join(" · ");
+  const sub = w.type === "gym" ? `Gym · ${w.exercises.filter(e => e.mode !== "timed").reduce((n, e) => n + (e.sets ?? w.sets), 0)} sets · ${w.rest}s rest · own pace` : [
     w.exercises.length > 1 ? `${w.exercises.length} exercises` : null,
     `${w.work}/${w.rest} sec`,
     w.rounds > 1 ? `${w.rounds} rounds` : null,
@@ -165,11 +243,14 @@ function cardHtml(w) {
 
 function renderHome() {
   const by = (a, b) => (b.lastDone || b.created) - (a.lastDone || a.created);
-  const favs = library.filter(w => w.favorite).sort(by);
-  const rest = library.filter(w => !w.favorite).sort((a, b) => (b.fresh ? 1 : 0) - (a.fresh ? 1 : 0) || by(a, b));
+  const visible = library.filter(w => w.type === libraryType);
+  document.querySelectorAll("[data-library-type]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.libraryType === libraryType)));
+  const favs = visible.filter(w => w.favorite).sort(by);
+  const rest = visible.filter(w => !w.favorite).sort((a, b) => (b.fresh ? 1 : 0) - (a.fresh ? 1 : 0) || by(a, b));
+  $("load-gym-example").hidden = libraryType !== "gym";
   $("favs-wrap").hidden = !favs.length;
   $("favs").innerHTML = favs.map(cardHtml).join("");
-  $("all").innerHTML = rest.map(cardHtml).join("") || '<div class="empty">Everything is in your favourites.</div>';
+  $("all").innerHTML = rest.map(cardHtml).join("") || '<div class="empty">No sessions here. Add a workout or paste a schedule below.</div>';
   $("history").innerHTML = log.length
     ? log.slice(0, 12).map(h => `<li><span>${esc(h.title)}</span><small>${dateLabel(h.date)} · ${mins(h.seconds)}</small></li>`).join("")
     : '<li class="empty">No workouts completed yet.</li>';
@@ -196,6 +277,7 @@ function tryLoad(text) {
   try {
     $("err").textContent = "";
     const w = upsert(parseInput(text));
+    libraryType = w.type;
     saveLib(); renderHome(); showView("home");
     history_replace();
     $("paste").value = "";
@@ -222,6 +304,8 @@ function openEditor(w) {
   draftIsNew = !w;
   editing = w || null;
   draft = JSON.parse(JSON.stringify(w || normalize({ title: "New workout", prepare: 10, work: 40, rest: 20, rounds: 1, exercises: [{ name: "Exercise 1" }] })));
+  if (!w) draft.type = libraryType;
+  $("e-type").value = draft.type;
   $("e-title").value = draft.title;
   $("e-del").hidden = draftIsNew;
   paintEditor();
@@ -229,7 +313,18 @@ function openEditor(w) {
   window.scrollTo(0, 0);
 }
 function paintEditor() {
-  $("e-rows").innerHTML = ROWS.map(r => `<div class="row" data-k="${r.k}">
+  $("e-finisher-wrap").hidden = draft.type !== "gym";
+  $("e-finisher-enabled").checked = !!draft.finisher;
+  $("e-finisher-fields").hidden = !draft.finisher;
+  if (draft.finisher) {
+    for (const key of ["rounds", "work", "rest"]) $("f-" + key).value = draft.finisher[key] ?? (key === "rounds" ? 3 : draft[key]);
+    $("f-exercises").innerHTML = draft.finisher.exercises.map((e, i) => `<div class="finisher-ex">
+      <input data-fi="${i}" data-key="name" value="${esc(e.name)}" placeholder="Exercise name" aria-label="Finisher exercise name">
+      <input data-fi="${i}" data-key="detail" value="${esc(e.detail || "")}" placeholder="Weight / detail" aria-label="Finisher exercise detail">
+      <button data-fdel="${i}" aria-label="Remove finisher exercise">${icon("trash")}</button>
+    </div>`).join("");
+  }
+  $("e-rows").innerHTML = (draft.type === "gym" ? ROWS.filter(r => ["prepare", "rest", "cooldown"].includes(r.k)) : ROWS).map(r => `<div class="row" data-k="${r.k}">
       <span class="dot" style="background:${r.color}"></span>
       <div class="lbl"><b>${r.label}</b><span>${r.sub}</span></div>
       <div class="val">${r.unit === "s" ? ":" + String(draft[r.k]).padStart(2, "0") : draft[r.k]}</div>
@@ -237,6 +332,13 @@ function paintEditor() {
   $("e-ex").innerHTML = draft.exercises.map((x, i) => `<div class="ex" data-i="${i}">
       <input class="n" value="${esc(x.name)}" placeholder="Exercise name">
       <input class="d" value="${esc(x.detail || "")}" placeholder="Detail (weight, muscle group)">
+      ${draft.type === "gym" ? `<div class="gym-fields">
+        <label>Mode<select data-field="mode"><option value="sets" ${x.mode !== "timed" ? "selected" : ""}>Sets</option><option value="timed" ${x.mode === "timed" ? "selected" : ""}>Timed</option></select></label>
+        <label>Sets<input data-field="sets" type="number" min="1" max="100" value="${x.sets ?? draft.sets}"></label>
+        <label>Reps<input data-field="reps" value="${esc(x.reps || "")}" placeholder="e.g. 8–12"></label>
+        <label>Rest (s)<input data-field="rest" type="number" min="0" value="${x.rest ?? draft.rest}"></label>
+        <label>Work (s)<input data-field="work" type="number" min="1" value="${x.work ?? draft.work}"></label>
+      </div>` : ""}
       <button data-del="${i}" aria-label="Remove">${icon("trash")}</button></div>`).join("");
 }
 $("e-rows").addEventListener("click", e => {
@@ -247,20 +349,42 @@ $("e-rows").addEventListener("click", e => {
 $("e-ex").addEventListener("input", e => {
   const i = +e.target.closest(".ex").dataset.i;
   if (e.target.classList.contains("n")) draft.exercises[i].name = e.target.value;
-  else draft.exercises[i].detail = e.target.value;
+  else if (e.target.dataset.field) {
+    const k = e.target.dataset.field;
+    draft.exercises[i][k] = ["mode", "reps"].includes(k) ? e.target.value : Math.max(k === "rest" ? 0 : 1, Number(e.target.value) || 0);
+  } else draft.exercises[i].detail = e.target.value;
 });
 $("e-ex").addEventListener("click", e => {
   const b = e.target.closest("[data-del]"); if (!b || draft.exercises.length < 2) return;
   draft.exercises.splice(+b.dataset.del, 1); paintEditor();
 });
+$("e-finisher-enabled").onchange = () => {
+  draft.finisher = $("e-finisher-enabled").checked ? { rounds: 3, work: 30, rest: draft.rest, exercises: [{ name: "Finisher exercise" }] } : null;
+  paintEditor();
+};
+for (const key of ["rounds", "work", "rest"]) $("f-" + key).oninput = e => {
+  draft.finisher[key] = Math.max(key === "rest" ? 0 : 1, Math.floor(Number(e.target.value) || 0));
+};
+$("f-exercises").oninput = e => {
+  if (e.target.dataset.fi !== undefined) draft.finisher.exercises[+e.target.dataset.fi][e.target.dataset.key] = e.target.value;
+};
+$("f-exercises").onclick = e => {
+  const b = e.target.closest("[data-fdel]");
+  if (b && draft.finisher.exercises.length > 1) { draft.finisher.exercises.splice(+b.dataset.fdel, 1); paintEditor(); }
+};
+$("f-add").onclick = () => { draft.finisher.exercises.push({ name: "Finisher exercise" }); paintEditor(); };
+$("e-type").onchange = () => { draft.type = $("e-type").value; paintEditor(); };
+document.querySelectorAll("[data-library-type]").forEach(b => b.onclick = () => { libraryType = b.dataset.libraryType; renderHome(); });
 $("e-addex").onclick = () => { draft.exercises.push({ name: "Exercise " + (draft.exercises.length + 1) }); paintEditor(); };
 $("e-cancel").onclick = () => { showView("home"); renderHome(); };
 $("e-save").onclick = () => {
   draft.title = $("e-title").value.trim() || "Workout";
   draft.exercises = draft.exercises.filter(x => x.name.trim());
   if (!draft.exercises.length) return;
+  try { draft = normalize(draft); } catch (e) { alert(e.message); return; }
   delete draft.fresh;
   if (draftIsNew) { draft.id = newId(); library.unshift(draft); } else Object.assign(editing, draft);
+  libraryType = draft.type;
   saveLib(); showView("home"); renderHome();
 };
 $("e-del").onclick = () => {
@@ -295,7 +419,7 @@ function cancelCountdown() {
 }
 function scheduleCountdown() {
   cancelCountdown();
-  if (!running || muted || !ctx) return;
+  if (!running || muted || !ctx || phases[idx]?.manual) return;
   for (const sec of [3, 2, 1]) {
     const delay = remaining / 1000 - sec;
     if (delay >= 0) countdownNodes.push(beep(880, 0.2, delay, 0.7));
@@ -340,6 +464,7 @@ document.addEventListener("visibilitychange", () => {
 
 // ---------- Timer ----------
 let workout = null, phases = [], idx = 0, endAt = 0, remaining = 0, running = false, lastSec = null, timerId = null;
+let activeMs = 0, resumedAt = 0;
 const CIRC = 2 * Math.PI * 86;
 
 (function drawTicks() {
@@ -355,6 +480,8 @@ const CIRC = 2 * Math.PI * 86;
 function startWorkout(w) {
   setDimmed(false);
   cancelCountdown();
+  clearInterval(timerId); timerId = null;
+  activeMs = 0; resumedAt = 0;
   workout = w; phases = buildPhases(w); idx = 0;
   remaining = phases[0].dur * 1000; running = false; lastSec = null;
   delete w.fresh;
@@ -379,6 +506,7 @@ function enterPhase(i, announce = true) {
 
 function finish() {
   cancelCountdown();
+  if (running) activeMs += Date.now() - resumedAt;
   running = false; clearInterval(timerId); timerId = null; wake?.release?.();
   idx = phases.length;
   document.body.className = "done";
@@ -388,8 +516,9 @@ function finish() {
   $("exname").textContent = "Well done"; $("exdetail").textContent = ""; $("next").textContent = "";
   $("total").textContent = "00:00";
   $("toggle").innerHTML = icon("replay");
+  $("complete-set").hidden = true;
   sound.done(); speak("Done");
-  const secs = totalSeconds(workout), now = Date.now();
+  const secs = workout.type === "gym" ? Math.round(activeMs / 1000) : totalSeconds(workout), now = Date.now();
   workout.lastDone = now; saveLib();
   log.unshift({ title: workout.title, date: now, seconds: secs });
   log = log.slice(0, 60); store.set("history", log);
@@ -397,6 +526,7 @@ function finish() {
 
 function tick() {
   if (!running) return;
+  if (phases[idx]?.manual) { remaining = Date.now() - endAt; paintTime(); return; }
   let rem = endAt - Date.now();
   if (rem <= 0) {
     // Advance against the original deadline, including every phase missed while suspended.
@@ -404,6 +534,10 @@ function tick() {
     while (deadline <= Date.now()) {
       next++;
       if (next >= phases.length) return finish();
+      if (phases[next].manual) {
+        enterPhase(next);
+        return;
+      }
       deadline += phases[next].dur * 1000;
     }
     enterPhase(next, false);
@@ -424,13 +558,16 @@ function toggle() {
   if (idx >= phases.length) return startWorkout(workout);
   running = !running;
   if (running) {
-    endAt = Date.now() + remaining;
+    resumedAt = Date.now();
+    endAt = phases[idx].manual ? Date.now() - remaining : Date.now() + remaining;
     keepAwake();
     scheduleCountdown();
     if (!timerId) timerId = setInterval(tick, 100);
+    if (idx === 0 && phases[0].manual && remaining === 0) speak(phases[0].name);
     if (idx === 0 && phases[0].type === "prepare" && remaining === phases[0].dur * 1000) speak("Next: " + phases[0].next);
   } else {
-    remaining = Math.max(0, endAt - Date.now());
+    activeMs += Date.now() - resumedAt;
+    remaining = Math.max(0, phases[idx].manual ? Date.now() - endAt : endAt - Date.now());
     cancelCountdown(); wake?.release?.();
   }
   $("toggle").innerHTML = icon(running ? "pause" : "play");
@@ -449,30 +586,33 @@ const dots = (n, at) => Array.from({ length: n }, (_, i) => (i < at ? "●" : "�
 function paintTime() {
   $("time").textContent = mmss(remaining / 1000);
   paintDimmed();
-  const dur = phases[Math.min(idx, phases.length - 1)].dur * 1000;
-  $("ring").style.strokeDashoffset = CIRC * (1 - Math.max(0, Math.min(1, remaining / dur)));
+  const current = phases[Math.min(idx, phases.length - 1)];
+  const dur = current.dur * 1000;
+  $("ring").style.strokeDashoffset = CIRC * (1 - Math.max(0, Math.min(1, (dur ? remaining / dur : 1))));
   let tot = remaining;
   for (let i = idx + 1; i < phases.length; i++) tot += phases[i].dur * 1000;
-  $("total").textContent = mmss(tot / 1000);
+  $("total").textContent = workout.type === "gym" ? "Own pace" : mmss(tot / 1000);
 }
 function render() {
   const p = phases[idx];
   document.body.className = p.type;
   document.body.classList.toggle("dimmed", !$("dim-screen").hidden);
-  $("phase").textContent = LABEL[p.type];
-  const ex = workout.exercises[p.ex];
+  $("phase").textContent = p.manual ? "SET · OWN PACE" : LABEL[p.type];
+  const ex = allExercises(workout)[p.ex];
+  $("complete-set").hidden = !p.manual;
+  $("round-label").textContent = workout.type === "gym" ? "Set / Round" : "Round";
   if (p.type === "prepare") { $("exname").textContent = ""; $("exdetail").textContent = ""; $("next").textContent = "Next: " + p.next; }
   else if (p.type === "cooldown") { $("exname").textContent = "Cool down"; $("exdetail").textContent = ""; $("next").textContent = ""; }
   else {
-    $("exname").textContent = ex.name; $("exdetail").textContent = ex.detail || "";
+    $("exname").textContent = ex.name; $("exdetail").textContent = p.detail || ex.detail || "";
     $("next").textContent = p.type === "rest" && p.next ? "Next: " + p.next : "";
   }
-  const multiEx = workout.exercises.length > 1, rounds = p.rounds || 0;
+  const multiEx = allExercises(workout).length > 1, rounds = p.sets || p.rounds || 0;
   $("row-cycle").hidden = workout.cycles < 2;
   $("row-ex").hidden = !multiEx;
   $("cydots").textContent = dots(workout.cycles, p.cycle);
-  $("exdots").textContent = dots(workout.exercises.length, p.type === "prepare" ? 0 : p.ex + 1);
-  $("rdots").textContent = rounds ? dots(rounds, p.round) : "";
+  $("exdots").textContent = dots(allExercises(workout).length, p.type === "prepare" ? 0 : p.ex + 1);
+  $("rdots").textContent = workout.type === "gym" && p.set ? `${p.set} / ${p.sets}` : rounds ? dots(rounds, p.round) : "";
   $("toggle").innerHTML = icon(running ? "pause" : "play");
   paintTime();
 }
@@ -480,7 +620,7 @@ function render() {
 function paintDimmed() {
   if ($("dim-screen").hidden) return;
   $("dim-time").textContent = mmss(remaining / 1000);
-  $("dim-phase").textContent = LABEL[phases[idx]?.type] || "DONE";
+  $("dim-phase").textContent = phases[idx]?.manual ? "SET · OWN PACE" : LABEL[phases[idx]?.type] || "DONE";
   $("dim-status").textContent = running ? "" : "Paused";
 }
 function setDimmed(dimmed) {
@@ -499,6 +639,11 @@ document.addEventListener("keydown", e => {
   if (e.key === "Escape" && !$("dim-screen").hidden) setDimmed(false);
 });
 
+$("complete-set").onclick = () => {
+  if (!phases[idx]?.manual) return;
+  if (!running) toggle();
+  skip();
+};
 $("toggle").onclick = toggle;
 $("skip").onclick = skip;
 $("prev").onclick = prev;
@@ -514,8 +659,20 @@ $("load").onclick = () => tryLoad($("paste").value);
 // ---------- Start ----------
 paintMute();
 renderHome();
-if (location.hash.length > 1) tryLoad(location.hash);
-window.addEventListener("hashchange", () => { if (location.hash.length > 1) tryLoad(location.hash); });
+async function loadGymExample() {
+  try {
+    const response = await fetch("gym-example.json");
+    if (!response.ok) throw new Error("Could not load the gym example. Please try again online.");
+    tryLoad(await response.text());
+  } catch (e) { $("err").textContent = e.message; }
+}
+$("load-gym-example").onclick = loadGymExample;
+function loadHash() {
+  if (location.hash === "#example=a9-gym") loadGymExample();
+  else if (location.hash.length > 1) tryLoad(location.hash);
+}
+loadHash();
+window.addEventListener("hashchange", loadHash);
 // A new worker gets fresh assets, then reload only when no workout/editor is open.
 let pendingUpdate = false, reloadingForUpdate = false, updateRegistration = null;
 function applyPendingUpdate() {
@@ -529,7 +686,7 @@ async function checkForUpdates(manual = false) {
   try {
     await updateRegistration.update();
     if (manual) $("update-status").textContent = updateRegistration.installing || pendingUpdate
-      ? "Downloading update…" : "Version 13 · Update check complete";
+      ? "Downloading update…" : "Version 14 · Update check complete";
     applyPendingUpdate();
   } catch {
     if (manual) $("update-status").textContent = "Offline · Try again when connected";
@@ -547,7 +704,7 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(reg => {
     updateRegistration = reg;
     checkForUpdates();
-  }).catch(() => { $("update-status").textContent = "Version 13 · Offline mode unavailable"; });
+  }).catch(() => { $("update-status").textContent = "Version 14 · Offline mode unavailable"; });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") checkForUpdates();
   });

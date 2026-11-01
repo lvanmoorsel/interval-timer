@@ -21,6 +21,8 @@
     <h1>Workouts</h1>
     <button id="new" class="icon" aria-label="New workout" data-icon="plus"></button>
   </header>
+  <nav class="session-types" aria-label="Session type"><button data-library-type="interval" aria-pressed="true">Interval / Tabata</button><button data-library-type="gym" aria-pressed="false">Gym / Sets</button></nav>
+  <button id="load-gym-example" class="flat" hidden>Load A9 Gym Push example</button>
   <div id="favs-wrap"><h2>Favourites</h2><div id="favs" class="cards"></div></div>
   <h2>All workouts</h2>
   <div id="all" class="cards"></div>
@@ -31,7 +33,7 @@
   <button id="load" class="flat">Add</button>
   <p id="err" class="err"></p>
   <button id="check-update" class="flat">Check for updates</button>
-  <p id="update-status" role="status">Version 13</p>
+  <p id="update-status" role="status">Version 14</p>
 </main>
 
 <!-- Editor: zelfde opzet als de Tabata-instellingen -->
@@ -43,11 +45,25 @@
   </header>
   <div class="scroll">
     <input id="e-title" class="title-input" placeholder="Name">
-    <h2>Intervals</h2>
+    <label class="type-label">Session type<select id="e-type"><option value="interval">Interval / Tabata</option><option value="gym">Gym / Sets</option></select></label>
+    <h2>Timing</h2>
     <div id="e-rows" class="rows"></div>
     <h2>Exercises</h2>
     <div id="e-ex" class="ex-list"></div>
     <button id="e-addex" class="flat">+ Exercise</button>
+    <section id="e-finisher-wrap" hidden>
+      <h2>Finisher circuit</h2>
+      <label class="type-label"><input id="e-finisher-enabled" type="checkbox"> Include a timed finisher</label>
+      <div id="e-finisher-fields" hidden>
+        <div class="gym-fields">
+          <label>Rounds<input id="f-rounds" type="number" min="1" max="100"></label>
+          <label>Work (s)<input id="f-work" type="number" min="1"></label>
+          <label>Rest (s)<input id="f-rest" type="number" min="0"></label>
+        </div>
+        <div id="f-exercises"></div>
+        <button id="f-add" class="flat">+ Finisher exercise</button>
+      </div>
+    </section>
     <button id="e-del" class="flat danger">Delete workout</button>
   </div>
 </main>
@@ -74,12 +90,13 @@
     <div id="exname"></div>
     <div id="exdetail"></div>
     <div id="next"></div>
+    <button id="complete-set" hidden>Set completed</button>
   </section>
 
   <section class="dots">
     <div id="row-cycle"><span>Cycle</span><b id="cydots"></b></div>
     <div id="row-ex"><span>Exercise</span><b id="exdots"></b></div>
-    <div><span>Round</span><b id="rdots"></b></div>
+    <div><span id="round-label">Round</span><b id="rdots"></b></div>
     <div class="total"><span>Total left</span><b id="total"></b></div>
   </section>
 

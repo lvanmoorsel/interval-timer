@@ -1,0 +1,54 @@
+{
+  "type": "gym",
+  "title": "A9 Gym Push Sets",
+  "prepare": 300,
+  "rest": 45,
+  "cooldown": 120,
+  "sets": 3,
+  "exercises": [
+    {
+      "name": "Incline DB press",
+      "detail": "2 x 16 kg",
+      "sets": 3
+    },
+    {
+      "name": "Shoulder press",
+      "detail": "2 x 12 kg",
+      "sets": 3
+    },
+    {
+      "name": "Chest press",
+      "detail": "70% normal",
+      "sets": 3
+    },
+    {
+      "name": "Lateral raise",
+      "detail": "2 x 6 kg",
+      "sets": 3
+    },
+    {
+      "name": "Triceps extension",
+      "detail": "12 to 16 kg",
+      "sets": 3
+    }
+  ],
+  "finisher": {
+    "rounds": 3,
+    "work": 30,
+    "rest": 45,
+    "exercises": [
+      {
+        "name": "Farmer carry",
+        "detail": "2 x 20 kg"
+      },
+      {
+        "name": "Push press",
+        "detail": "2 x 10 kg"
+      },
+      {
+        "name": "Treadmill",
+        "detail": "Brisk walk"
+      }
+    ]
+  }
+}

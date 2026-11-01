@@ -114,3 +114,20 @@ body.dimmed { background:#000; transition:none; overflow:hidden; }
 #undim:focus-visible { outline:2px solid #888; outline-offset:4px; }
 
 #update-status { color:var(--mute); text-align:center; font-size:12px; margin:12px 0; }
+
+.session-types { display:flex; gap:4px; padding:4px; background:var(--card); border-radius:14px; margin-top:16px; }
+.session-types button { flex:1; padding:12px 6px; border-radius:10px; font-weight:600; font-size:14px; }
+.session-types button[aria-pressed="true"] { background:var(--prepare); color:#111; }
+.type-label { display:block; margin-top:20px; font-size:13px; color:var(--mute); }
+select { display:block; width:100%; padding:10px; border:1px solid var(--line); background:var(--card); color:#fff; border-radius:10px; font:inherit; margin-top:4px; }
+.gym-fields { grid-column:1; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.gym-fields label { font-size:12px; color:var(--mute); min-width:0; }
+.gym-fields input { display:block; width:100%; border-bottom:1px solid var(--line); }
+#complete-set { padding:12px 24px; border-radius:24px; background:#143d21; color:#fff; font-weight:700; font-size:16px; }
+body:has(#complete-set:not([hidden])) .clock { width:min(65vw,28dvh,250px); }
+
+#e-finisher-fields { margin-top:14px; }
+#e-finisher-fields input { width:100%; background:var(--card); color:#fff; border:1px solid var(--line); border-radius:8px; padding:10px; font:inherit; }
+.finisher-ex { display:grid; grid-template-columns:minmax(0,1fr) 40px; gap:6px; margin-top:12px; }
+.finisher-ex input { grid-column:1; }
+.finisher-ex button { grid-column:2; grid-row:1 / span 2; color:var(--mute); }

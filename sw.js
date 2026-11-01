@@ -1,6 +1,6 @@
 // Offline-first: de app werkt ook zonder verbinding. Verhoog VERSION na een wijziging.
-const VERSION = "v13";
-const FILES = ["./", "index.html", "style.css", "app.js", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"];
+const VERSION = "v14";
+const FILES = ["./", "index.html", "gym-example.json", "style.css", "app.js", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES.map(file => new Request(file, { cache: "reload" })))));
